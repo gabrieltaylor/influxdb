@@ -1,28 +1,28 @@
-package data
+package influxdb
 
 import (
 	"fmt"
 	"testing"
 )
 
-func TestAckOne(t *testing.T) {
-	ap := newAckPolicyN(1)
+func TestConsistencyOne(t *testing.T) {
+	ap := newConsistencyPolicyN(1)
 
 	if got := ap.IsDone(0, nil); got != true {
 		t.Errorf("ack one mismatch: got %v, exp %v", got, true)
 	}
 }
 
-func TestAckOneError(t *testing.T) {
-	ap := newAckPolicyN(1)
+func TestConsistencyOneError(t *testing.T) {
+	ap := newConsistencyPolicyN(1)
 
 	if got := ap.IsDone(0, fmt.Errorf("foo")); got != false {
 		t.Errorf("ack one error mismatch: got %v, exp %v", got, false)
 	}
 }
 
-func TestAckOneMultiple(t *testing.T) {
-	ap := newAckPolicyN(1)
+func TestConsistencyOneMultiple(t *testing.T) {
+	ap := newConsistencyPolicyN(1)
 
 	if got := ap.IsDone(0, nil); got != true {
 		t.Errorf("ack one error mismatch: got %v, exp %v", got, true)
@@ -33,8 +33,8 @@ func TestAckOneMultiple(t *testing.T) {
 	}
 }
 
-func TestAckAll(t *testing.T) {
-	ap := newAckPolicyN(3)
+func TestConsistencyAll(t *testing.T) {
+	ap := newConsistencyPolicyN(3)
 
 	if got := ap.IsDone(0, nil); got != false {
 		t.Errorf("ack one error mismatch: got %v, exp %v", got, false)
@@ -49,8 +49,8 @@ func TestAckAll(t *testing.T) {
 	}
 }
 
-func TestAckAllError(t *testing.T) {
-	ap := newAckPolicyN(3)
+func TestConsistencyAllError(t *testing.T) {
+	ap := newConsistencyPolicyN(3)
 
 	if got := ap.IsDone(0, nil); got != false {
 		t.Errorf("ack one error mismatch: got %v, exp %v", got, false)
@@ -65,8 +65,8 @@ func TestAckAllError(t *testing.T) {
 	}
 }
 
-func TestAckQuorumError(t *testing.T) {
-	ap := newAckPolicyN(2)
+func TestConsistencyQuorumError(t *testing.T) {
+	ap := newConsistencyPolicyN(2)
 
 	if got := ap.IsDone(0, nil); got != false {
 		t.Errorf("ack one error mismatch: got %v, exp %v", got, false)
@@ -81,8 +81,8 @@ func TestAckQuorumError(t *testing.T) {
 	}
 }
 
-func TestAckOwner(t *testing.T) {
-	ap := newAckOwnerPolicy(2)
+func TestConsistencyOwner(t *testing.T) {
+	ap := newConsistencyOwnerPolicy(2)
 
 	// non-owner, not done
 	if got := ap.IsDone(0, nil); got != false {
@@ -100,8 +100,8 @@ func TestAckOwner(t *testing.T) {
 	}
 }
 
-func TestAckOwnerError(t *testing.T) {
-	ap := newAckOwnerPolicy(2)
+func TestConsistencyOwnerError(t *testing.T) {
+	ap := newConsistencyOwnerPolicy(2)
 
 	// non-owner succeeds, should not be done
 	if got := ap.IsDone(0, nil); got != false {

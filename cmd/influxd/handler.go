@@ -147,7 +147,7 @@ func (h *Handler) serveAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.Server != nil {
-		sh := httpd.NewAPIHandler(h.DataNode, h.Config.Authentication.Enabled,
+		sh := httpd.NewAPIHandler(nil, nil, nil, h.Config.Authentication.Enabled,
 			h.Config.Logging.HTTPAccess, version)
 		sh.WriteTrace = h.Config.Logging.WriteTracing
 		sh.ServeHTTP(w, r)

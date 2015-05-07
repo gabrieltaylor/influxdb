@@ -8,7 +8,6 @@ import (
 
 	"github.com/influxdb/influxdb"
 	"github.com/influxdb/influxdb/client"
-	"github.com/influxdb/influxdb/data"
 )
 
 const (
@@ -17,11 +16,11 @@ const (
 
 // UDPServer
 type UDPServer struct {
-	writer data.PointsWriter
+	writer influxdb.PointsWriter
 }
 
 // NewUDPServer returns a new instance of a UDPServer
-func NewUDPServer(w data.PointsWriter) *UDPServer {
+func NewUDPServer(w influxdb.PointsWriter) *UDPServer {
 	u := UDPServer{
 		writer: w,
 	}
@@ -65,7 +64,7 @@ func (u *UDPServer) ListenAndServe(iface string) error {
 				continue
 			}
 
-			if err := u.writer.Write(&data.WritePointsRequest{Database: bp.Database, RetentionPolicy: bp.RetentionPolicy, Points: points}); err != nil {
+			if err := u.writer.Write(&influxdb.WritePointsRequest{Database: bp.Database, RetentionPolicy: bp.RetentionPolicy, Points: points}); err != nil {
 				log.Printf("Server write failed. %s", err)
 			}
 		}

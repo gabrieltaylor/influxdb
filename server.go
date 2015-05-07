@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/influxdb/influxdb/data"
 	"github.com/influxdb/influxdb/influxql"
 	"github.com/influxdb/influxdb/messaging"
 	"golang.org/x/crypto/bcrypt"
@@ -54,6 +55,36 @@ const (
 	// When planning a select statement, passing zero tells it not to chunk results. Only applies to raw queries
 	NoChunkingSize = 0
 )
+
+type Service interface {
+	Open() error
+	Close() error
+}
+
+// QueryExecutor executes a query across multiple data nodes
+type QueryExecutor interface {
+	Query(q *QueryRequest) (chan *Result, error)
+}
+
+type QueryRequest struct {
+	Query     *influxql.Query
+	Database  string
+	User      *User
+	ChunkSize int
+}
+
+// PayloadWriter accepts a WritePointRequest from client facing endpoints such as
+// HTTP JSON API, Collectd, Graphite, OpenTSDB, etc.
+type PointsWriter interface {
+	Write(p *WritePointsRequest) error
+}
+
+type WritePointsRequest struct {
+	Database         string
+	RetentionPolicy  string
+	ConsistencyLevel ConsistencyLevel
+	Points           []Point
+}
 
 // Server represents a collection of metadata and raw metric data.
 type Server struct {
@@ -101,6 +132,21 @@ type Server struct {
 	// Build information.
 	Version    string
 	CommitHash string
+
+	// The local data node that manages local shard data
+	dn data.Node
+
+	// The meta store for accessing and updating cluster and schema data
+	//ms meta.Store
+
+	// The services running on this node
+	services []Service
+
+	// Handles write request for local and remote nodes
+	Pw PointsWriter
+
+	// Handles queries for local and remote nodes
+	qe QueryExecutor
 }
 
 // NewServer returns a new instance of Server.
@@ -115,12 +161,32 @@ func NewServer() *Server {
 		shards: make(map[uint64]*Shard),
 		stats:  NewStats("server"),
 		Logger: log.New(os.Stderr, "[server] ", log.LstdFlags),
+		Pw:     &Coordinator{},
+		qe:     &Coordinator{},
 	}
 	// Server will always return with authentication enabled.
 	// This ensures that disabling authentication must be an explicit decision.
 	// To set the server to 'authless mode', call server.SetAuthenticationEnabled(false).
 	s.authenticationEnabled = true
 	return &s
+}
+
+func (s *Server) openServices() error {
+	for _, n := range s.services {
+		if err := n.Open(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Server) closeServices() error {
+	for _, n := range s.services {
+		if err := n.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) BrokerURLs() []url.URL {
@@ -225,7 +291,7 @@ func (s *Server) Open(path string, client MessagingClient) error {
 
 	// TODO: Associate series ids with shards.
 
-	return nil
+	return s.openServices()
 }
 
 // opened returns true when the server is open. Must be called under lock.
@@ -241,6 +307,10 @@ func (s *Server) Close() error {
 func (s *Server) close() error {
 	if !s.opened() {
 		return ErrServerClosed
+	}
+
+	if err := s.closeServices(); err != nil {
+		return err
 	}
 
 	if s.rpDone != nil {

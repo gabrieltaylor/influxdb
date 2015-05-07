@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/influxdb/influxdb"
-	"github.com/influxdb/influxdb/data"
 )
 
 const (
@@ -41,7 +40,7 @@ type Server interface {
 
 // NewServer return a Graphite server for the given protocol, using the given parser
 // series writer, and database.
-func NewServer(protocol string, p *Parser, w data.PointsWriter, db string) (Server, error) {
+func NewServer(protocol string, p *Parser, w influxdb.PointsWriter, db string) (Server, error) {
 	if strings.ToLower(protocol) == "tcp" {
 		return NewTCPServer(p, w, db), nil
 	} else if strings.ToLower(protocol) == "udp" {

@@ -9,12 +9,11 @@ import (
 	"sync"
 
 	"github.com/influxdb/influxdb"
-	"github.com/influxdb/influxdb/data"
 )
 
 // TCPServer processes Graphite data received over TCP connections.
 type TCPServer struct {
-	writer   data.PointsWriter
+	writer   influxdb.PointsWriter
 	parser   *Parser
 	database string
 	listener *net.Listener
@@ -28,7 +27,7 @@ type TCPServer struct {
 }
 
 // NewTCPServer returns a new instance of a TCPServer.
-func NewTCPServer(p *Parser, w data.PointsWriter, db string) *TCPServer {
+func NewTCPServer(p *Parser, w influxdb.PointsWriter, db string) *TCPServer {
 	return &TCPServer{
 		parser:   p,
 		writer:   w,
@@ -115,7 +114,7 @@ func (t *TCPServer) handleConnection(conn net.Conn) {
 		}
 
 		// Send the data to the writer.
-		e := t.writer.Write(&data.WritePointsRequest{Database: t.database, RetentionPolicy: "", Points: []influxdb.Point{point}})
+		e := t.writer.Write(&influxdb.WritePointsRequest{Database: t.database, RetentionPolicy: "", Points: []influxdb.Point{point}})
 		if e != nil {
 			t.Logger.Printf("failed to write data point to database %q: %s\n", t.database, e)
 		}

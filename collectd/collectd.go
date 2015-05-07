@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/influxdb/influxdb"
-	"github.com/influxdb/influxdb/data"
 	"github.com/kimor79/gollectd"
 )
 
@@ -24,14 +23,14 @@ type Server struct {
 
 	conn *net.UDPConn
 
-	writer      data.PointsWriter
+	writer      influxdb.PointsWriter
 	Database    string
 	typesdb     gollectd.Types
 	typesdbpath string
 }
 
 // NewServer constructs a new Server.
-func NewServer(w data.PointsWriter, typesDBPath string) *Server {
+func NewServer(w influxdb.PointsWriter, typesDBPath string) *Server {
 	s := Server{
 		done:        make(chan struct{}),
 		writer:      w,
@@ -118,7 +117,7 @@ func (s *Server) handleMessage(buffer []byte) {
 	for _, packet := range *packets {
 		points := Unmarshal(&packet)
 		for _, p := range points {
-			err := s.writer.Write(&data.WritePointsRequest{Database: s.Database, RetentionPolicy: "", Points: []influxdb.Point{p}})
+			err := s.writer.Write(&influxdb.WritePointsRequest{Database: s.Database, RetentionPolicy: "", Points: []influxdb.Point{p}})
 			if err != nil {
 				log.Printf("Collectd cannot write data: %s", err)
 				continue

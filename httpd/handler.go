@@ -17,7 +17,6 @@ import (
 	"github.com/bmizerany/pat"
 	"github.com/influxdb/influxdb"
 	"github.com/influxdb/influxdb/client"
-	"github.com/influxdb/influxdb/data"
 	"github.com/influxdb/influxdb/influxql"
 	"github.com/influxdb/influxdb/uuid"
 )
@@ -42,15 +41,15 @@ type route struct {
 	handlerFunc interface{}
 }
 
-type node interface {
-	data.PointsWriter
-	data.Queryer
-	data.Authenticator
+type Authenticator interface {
+	Authenticate(string, string) (*influxdb.User, error)
 }
 
 // Handler represents an HTTP handler for the InfluxDB server.
 type Handler struct {
-	dataNode              node
+	authenticator         Authenticator
+	queryExecutor         influxdb.QueryExecutor
+	pointsWriter          influxdb.PointsWriter
 	routes                []route
 	mux                   *pat.PatternServeMux
 	requireAuthentication bool
@@ -113,8 +112,8 @@ type Handler struct {
 //}
 
 // NewAPIHandler is the http handler for api endpoints
-func NewAPIHandler(n node, requireAuthentication, loggingEnabled bool, version string) *Handler {
-	h := newHandler(n, requireAuthentication, loggingEnabled, version)
+func NewAPIHandler(q influxdb.QueryExecutor, pw influxdb.PointsWriter, a Authenticator, requireAuthentication, loggingEnabled bool, version string) *Handler {
+	h := newHandler(q, pw, a, requireAuthentication, loggingEnabled, version)
 	h.SetRoutes([]route{
 		route{
 			"query", // Query serving route.
@@ -148,10 +147,12 @@ func NewAPIHandler(n node, requireAuthentication, loggingEnabled bool, version s
 }
 
 // newHandler returns a new instance of Handler.
-func newHandler(n node, requireAuthentication, loggingEnabled bool, version string) *Handler {
+func newHandler(q influxdb.QueryExecutor, pw influxdb.PointsWriter, a Authenticator, requireAuthentication, loggingEnabled bool, version string) *Handler {
 	return &Handler{
-		dataNode: n,
-		mux:      pat.New(),
+		authenticator: a,
+		queryExecutor: q,
+		pointsWriter:  pw,
+		mux:           pat.New(),
 		requireAuthentication: requireAuthentication,
 		Logger:                log.New(os.Stderr, "[http] ", log.LstdFlags),
 		loggingEnabled:        loggingEnabled,
@@ -230,7 +231,11 @@ func (h *Handler) serveQuery(w http.ResponseWriter, r *http.Request, user *influ
 
 	// Send results to client.
 	w.Header().Add("content-type", "application/json")
-	results, err := h.dataNode.Query(query, db, user, chunkSize)
+	results, err := h.queryExecutor.Query(&influxdb.QueryRequest{
+		Query:     query,
+		Database:  db,
+		User:      user,
+		ChunkSize: chunkSize})
 	if err != nil {
 		if isAuthorizationError(err) {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -357,7 +362,12 @@ type Batch struct {
 // Return all the measurements from the given DB
 func (h *Handler) showMeasurements(db string, user *influxdb.User) ([]string, error) {
 	var measurements []string
-	c, err := h.dataNode.Query(&influxql.Query{Statements: []influxql.Statement{&influxql.ShowMeasurementsStatement{}}}, db, user, 0)
+	c, err := h.queryExecutor.Query(
+		&influxdb.QueryRequest{
+			Query:     &influxql.Query{Statements: []influxql.Statement{&influxql.ShowMeasurementsStatement{}}},
+			Database:  db,
+			User:      user,
+			ChunkSize: 0})
 	if err != nil {
 		return measurements, err
 	}
@@ -415,7 +425,11 @@ func (h *Handler) serveDump(w http.ResponseWriter, r *http.Request, user *influx
 			return
 		}
 
-		res, err := h.dataNode.Query(query, db, user, DefaultChunkSize)
+		res, err := h.queryExecutor.Query(&influxdb.QueryRequest{
+			Query:     query,
+			Database:  db,
+			User:      user,
+			ChunkSize: DefaultChunkSize})
 		if err != nil {
 			w.Write([]byte("*** SERVER-SIDE ERROR. MISSING DATA ***"))
 			w.Write(delim)
@@ -531,7 +545,7 @@ func (h *Handler) serveWrite(w http.ResponseWriter, r *http.Request, user *influ
 		return
 	}
 
-	if err := h.dataNode.Write(&data.WritePointsRequest{Database: bp.Database, RetentionPolicy: bp.RetentionPolicy, Points: points}); err != nil {
+	if err := h.pointsWriter.Write(&influxdb.WritePointsRequest{Database: bp.Database, RetentionPolicy: bp.RetentionPolicy, Points: points}); err != nil {
 		writeError(influxdb.Result{Err: err}, http.StatusInternalServerError)
 		return
 	} else {
@@ -866,7 +880,7 @@ func authenticate(inner func(http.ResponseWriter, *http.Request, *influxdb.User)
 			return
 		}
 
-		user, err = h.dataNode.Authenticate(username, password)
+		user, err = h.authenticator.Authenticate(username, password)
 		if err != nil {
 			httpError(w, err.Error(), false, http.StatusUnauthorized)
 			return

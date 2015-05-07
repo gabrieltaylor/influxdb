@@ -282,6 +282,14 @@ func (s *Shard) readSeries(seriesID uint64, timestamp int64) (values []byte, err
 	return
 }
 
+func (s *Shard) Write(r *WritePointsRequest) error {
+	return nil
+}
+
+func (s *Shard) Read(timestamp time.Time) ([]Point, error) {
+	return nil, nil
+}
+
 // writeSeries writes series batch to a shard.
 func (s *Shard) writeSeries(index uint64, batch []byte) error {
 	return s.store.Update(func(tx *bolt.Tx) error {
